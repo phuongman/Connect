@@ -15,6 +15,10 @@ SDL_Window* gWindow;
 */
 SDL_Renderer* gRenderer;
 
+//Globally used font
+TTF_Font* gFont;
+
+
 bool init() {
     bool success = true;
     if (SDL_Init(SDL_INIT_EVERYTHING) < 0) {
@@ -43,6 +47,20 @@ bool init() {
                     printf("SDL_image could not initialize! SDL_image Error: %s\n", IMG_GetError());
                     success = false;
                 }
+
+                //Initialize SDL_ttf
+                if (TTF_Init() == -1)
+                {
+                    printf("SDL_ttf could not initialize! SDL_ttf Error: %s\n", TTF_GetError());
+                    success = false;
+                }
+
+                //Initialize SDL_mixer
+                if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+                {
+                    printf("SDL_mixer could not initialize! SDL_mixer Error: %s\n", Mix_GetError());
+                    success = false;
+                }
             }
         }
     }
@@ -55,8 +73,11 @@ void close() {
     gWindow = NULL;
     SDL_DestroyRenderer(gRenderer);
     gRenderer = NULL;
+    TTF_CloseFont(gFont);
+    gFont = NULL;
     SDL_Quit();
     IMG_Quit();
+    TTF_Quit();
 }
 
 int main(int argc, char* argv[]) {
@@ -64,7 +85,7 @@ int main(int argc, char* argv[]) {
         printf("failed to initialize SDL!!!!\nSDL Error: %s\n", SDL_GetError());
     }
     else {
-        Game game = Game(gWindow, gRenderer);
+        Game game = Game(gWindow, gRenderer, gFont);
         game.gameLoop();
     }
     close();
