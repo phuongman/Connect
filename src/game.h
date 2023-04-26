@@ -18,7 +18,7 @@ public:
     SDL_Renderer* renderer = NULL;
     TTF_Font* font = NULL;
 
-    Game(SDL_Window* gWindow, SDL_Renderer* gRenderer, TTF_Font* gFont);
+    Game(SDL_Window* gWindow, SDL_Renderer* gRenderer);
     ~Game();
     void RollBackOneButton();
     void RollBack();
@@ -29,7 +29,14 @@ public:
     void getNextstate(LButton* prevButton, LButton* curButton, bool goal);
     bool checkMouseouttable();
     bool checkBridge(LButton* curButton);
+
+    void stopMusic();
+    void continueMusic();
+    void resetMusic();
     void playingMusic();
+
+    void pauseGamePls();
+
     void resetTimeliquid();
     void movetimeliquidLeft();
     void timeDecay(double& timeperTile, double& curTime);

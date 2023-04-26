@@ -48,23 +48,6 @@ void LSound::playChunk()
     Mix_PlayChannel(-1, chunkSound, 0);
 }
 
-void LSound::pauseMusic()
-{
-    if (Mix_PausedMusic() == 0)
-        Mix_PauseMusic();
-}
-
-void LSound::resumeMusic()
-{
-    if (Mix_PausedMusic() == 1)
-        Mix_ResumeMusic();
-}
-
-void LSound::stopMusic()
-{
-    Mix_HaltMusic();
-}
-
 void LSound::playMusic(int loop)
 {
     if (Mix_PlayingMusic() == 0)

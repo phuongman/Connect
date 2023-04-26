@@ -15,9 +15,6 @@ SDL_Window* gWindow;
 */
 SDL_Renderer* gRenderer;
 
-//Globally used font
-TTF_Font* gFont;
-
 
 bool init() {
     bool success = true;
@@ -73,8 +70,6 @@ void close() {
     gWindow = NULL;
     SDL_DestroyRenderer(gRenderer);
     gRenderer = NULL;
-    TTF_CloseFont(gFont);
-    gFont = NULL;
     SDL_Quit();
     IMG_Quit();
     TTF_Quit();
@@ -85,7 +80,7 @@ int main(int argc, char* argv[]) {
         printf("failed to initialize SDL!!!!\nSDL Error: %s\n", SDL_GetError());
     }
     else {
-        Game game = Game(gWindow, gRenderer, gFont);
+        Game game = Game(gWindow, gRenderer);
         game.gameLoop();
     }
     close();

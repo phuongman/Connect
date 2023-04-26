@@ -6,11 +6,12 @@ const int szTable = 600;
 const int xTable = ((windowWidth - szTable) / 2 + 1);
 const int yTable = ((windowHeight - szTable) / 2 + 1);
 int xClock, yClock, xtimeLiquid;
-bool quit = false, isstartPage = true, islosePage = false;
+bool quit = false, isstartPage = true, islosePage = false, quitGame = false;
 
 // image things
 SDL_Rect buttonClips[170];
-Texture mainImage, tableBorder, mainPage, choosePlay, chooseScore;
+Texture mainImage, tableBorder, mainPage, choosePlay, chooseScore, gameOver, topThings, muteMusic, unmuteMusic;
+Texture pauseGame, chooseReturn, chooseMainMenu;
 
 // clock things
 SDL_Rect timeClip;
@@ -19,9 +20,8 @@ Texture Clock, timeLiquid, onlyClock;
 
 // button things
 int buttonSize = 150, sz, totalUnfinished, curColor, saveUnfinished;
-LButton a[10][10], playButton, scoreButton;
+LButton a[10][10], playButton, scoreButton, musicButton, pauseButton, returnButton, mainmenuButton;
 int colorList[10], sizeColorlist;
-
 /*
     1: saveButton
     2: oldbuttonState: state of saveButton
@@ -30,22 +30,27 @@ stack <dataRollback> rollbackList;
 
 // sound things
 const int totalSound = 4;
-LSound completepathChunk, completelevelChunk, chooseChunk, chooseChunk1, soundtrack[10];
+LSound completepathChunk, completelevelChunk, chooseChunk, chooseChunk1, soundtrack[10], gameoverSound;
 int cntMusic = 1e9, soundOrder[totalSound + 1];
 
-Game::Game(SDL_Window* gWindow, SDL_Renderer* gRenderer, TTF_Font* gFont)
+// ttf things
+Texture playerName;
+
+Game::Game(SDL_Window* gWindow, SDL_Renderer* gRenderer)
 {
     window = gWindow;
     renderer = gRenderer;
-    font = gFont;
     if (!loadMedia()) {
         cout << "Fail to load game media" << endl;
     }
 }
 
 Game::~Game() {
+    SDL_DestroyWindow(window);
     window = NULL;
+    SDL_DestroyRenderer(renderer);
     renderer = NULL;
+    TTF_CloseFont(font);
     font = NULL;
 }
 
@@ -77,6 +82,9 @@ bool Game::loadMedia() {
         success = false;
     }
     if (!chooseChunk1.loadChunk("../sound/chooseSound1.mp3")) {
+        success = false;
+    }
+    if (!gameoverSound.loadChunk("../sound/gameoverSound.mp3")) {
         success = false;
     }
     for (int i = 0; i < totalSound; i++) soundOrder[i] = i;
@@ -118,6 +126,29 @@ bool Game::loadMedia() {
     if (!chooseScore.loadTexture(renderer, "../images/chooseScore.png")) {
         success = false;
     }
+    if (!gameOver.loadTexture(renderer, "../images/gameOver.png")) {
+        success = false;
+    }
+    if (!topThings.loadTexture(renderer, "../images/topThings.png")) {
+        success = false;
+    }
+    if (!muteMusic.loadTexture(renderer, "../images/muteMusic.png")) {
+        success = false;
+    }
+    if (!unmuteMusic.loadTexture(renderer, "../images/unmuteMusic.png")) {
+        success = false;
+    }
+    if (!pauseGame.loadTexture(renderer, "../images/pauseGame.png")) {
+        success = false;
+    }
+    if (!chooseReturn.loadTexture(renderer, "../images/chooseReturn.png")) {
+        success = false;
+    }
+    if (!chooseMainMenu.loadTexture(renderer, "../images/chooseMainMenu.png")) {
+        success = false;
+    }
+
+    // clock, timeliquid things
     xClock = ((windowWidth - Clock.dest.w) / 2 + 1);
     yClock = 870;
     xtimeLiquid = xClock + onlyClock.dest.w / 2;
@@ -129,57 +160,84 @@ bool Game::loadMedia() {
     Clock.setDest(xClock, yClock, Clock.dest.w, Clock.dest.h);
     timeLiquid.setDest(xClock + onlyClock.dest.w / 2, yClock, timeLiquid.dest.w, timeLiquid.dest.h);
     onlyClock.setDest(xClock, yClock, onlyClock.dest.w, onlyClock.dest.h);
+
+    // mainPage things
     mainPage.setDest(0, 0, windowWidth, windowHeight);
     choosePlay.setDest(0, 0, windowWidth, windowHeight);
     chooseScore.setDest(0, 0, windowWidth, windowHeight);
     playButton.setPosition(256, 532, 166, 98);
     scoreButton.setPosition(238, 647, 191, 76);
 
+    // playPage things
+    returnButton.setPosition(185, 352, 339, 115);
+    mainmenuButton.setPosition(147, 539, 440, 119);
+
+    //music and menu button
+    musicButton.setPosition(539, 49, 43, 43);
+    pauseButton.setPosition(611, 49, 43, 43);
+
     // Blank
-    buttonClips[0].x = 0;
-    buttonClips[0].y = 0;
-    buttonClips[0].w = buttonSize;
-    buttonClips[0].h = buttonSize;
+    buttonClips[0] = { 0, 0, buttonSize, buttonSize };
 
     // Block
-    buttonClips[163].x = buttonSize;
-    buttonClips[163].y = 0;
-    buttonClips[163].w = buttonSize;
-    buttonClips[163].h = buttonSize;
+    buttonClips[163] = { buttonSize, 0, buttonSize, buttonSize };
 
     // Bridge
-    buttonClips[164].x = buttonSize * 2;
-    buttonClips[164].y = 0;
-    buttonClips[164].w = buttonSize;
-    buttonClips[164].h = buttonSize;
+    buttonClips[164] = { buttonSize * 2, 0, buttonSize, buttonSize };
 
     // Selected Bridge
-    buttonClips[165].x = buttonSize * 3;
-    buttonClips[165].y = 0;
-    buttonClips[165].w = buttonSize;
-    buttonClips[165].h = buttonSize;
+    buttonClips[165] = { buttonSize * 3, 0, buttonSize, buttonSize };
 
     // Remain
     int cnt = 1;
     sizeColorlist = 0;
     for (int i = 1; i <= 162; i++) {
         if (i % 18 == 1) colorList[++sizeColorlist] = i;
-        buttonClips[i].x = ((i - 1) % 18) * buttonSize;
-        buttonClips[i].y = cnt * buttonSize;
-        buttonClips[i].w = buttonSize;
-        buttonClips[i].h = buttonSize;
+        buttonClips[i] = { ((i - 1) % 18) * buttonSize, cnt * buttonSize, buttonSize, buttonSize };
         if (i % 18 == 0) cnt++;
+    }
+
+    // ttf things
+    // font = TTF_OpenFont("../ttf/Bitterbrush DEMO.otf", 30);
+    //font = TTF_OpenFont("../ttf/Baloo-Regular.ttf", 60);
+    font = TTF_OpenFont("../ttf/Pacifico-Regular.ttf", 40);
+    // font = TTF_OpenFont("../ttf/NotoMono-Regular.ttf", 60);
+    // font = TTF_OpenFont("../ttf/DroidSansMono.ttf", 60);
+    // font = TTF_OpenFont("../ttf/ShortBaby-Mg2w.ttf", 60);
+    if (font == NULL)
+    {
+        printf("Failed to load lazy font! SDL_ttf Error: %s\n", TTF_GetError());
+        success = false;
+    }
+    else
+    {
+        //Render text
+        SDL_Color textColor = { 0, 0, 0 };
+        if (!playerName.loadFromRenderedText(renderer, font, "Lợi Vua Nối 342689", textColor))
+        {
+            printf("Failed to render text texture!\n");
+            success = false;
+        }
     }
 
     return success;
 }
 
-// just playing music ._.
+// just music things ._.   
+void Game::stopMusic()
+{
+    if (Mix_PausedMusic() == 0) Mix_PauseMusic();
+}
+void Game::continueMusic() {
+    if (Mix_PausedMusic() == 1) Mix_ResumeMusic();
+}
+void Game::resetMusic() {
+    Mix_HaltMusic();
+    cntMusic = 0;
+    random_shuffle(soundOrder, soundOrder + totalSound);
+}
 void Game::playingMusic() {
-    if (cntMusic > totalSound) {
-        cntMusic = 0;
-        random_shuffle(soundOrder, soundOrder + totalSound);
-    }
+    if (cntMusic > totalSound) resetMusic();
     if (Mix_PlayingMusic() == 0) {
         soundtrack[soundOrder[cntMusic]].playMusic(0);
         cntMusic++;
@@ -204,9 +262,9 @@ bool Game::loadLevel(const char* path) {
 
     tableBorder.setDest(xTable - 15, yTable - 15, 630 - 600 % sz, 630 - 600 % sz);
     tableBorder.drawTexture(renderer);
-
+    topThings.drawTexture(renderer);
+    if (Mix_PausedMusic()) muteMusic.drawTexture(renderer);
     resetTimeliquid();
-    timeClock = 20;
 
     totalUnfinished = 0;
     for (int i = 1; i <= sz; i++)
@@ -286,8 +344,8 @@ bool Game::checkMouseouttable() {
     SDL_GetMouseState(&x, &y);
     bool outside = false;
     if (x < xTable) outside = true;
-    if (x >= a[sz][sz].mPosition.x + a[sz][sz].mPosition.w) outside = true;
     if (y < yTable) outside = true;
+    if (x >= a[sz][sz].mPosition.x + a[sz][sz].mPosition.w) outside = true;
     if (y >= a[sz][sz].mPosition.y + a[sz][sz].mPosition.h) outside = true;
     return outside;
 }
@@ -494,12 +552,72 @@ void Game::getNextstate(LButton* prevButton, LButton* curButton, bool goal) {
     else updateButton(curButton, curColor + 2 + (posState + 2) % 4);
 }
 
+void Game::pauseGamePls() {
+    while (true) {
+        pauseGame.drawTexture(renderer);
+        if (returnButton.checkMousein()) {
+            returnButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+            chooseReturn.drawTexture(renderer);
+        }
+        if (mainmenuButton.checkMousein()) {
+            mainmenuButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+            chooseMainMenu.drawTexture(renderer);
+        }
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+                return;
+            }
+            // music button
+            if (e.type == SDL_MOUSEBUTTONDOWN && musicButton.checkMousein()) {
+                if (Mix_PausedMusic()) {
+                    unmuteMusic.drawTexture(renderer);
+                    continueMusic();
+                }
+                else {
+                    muteMusic.drawTexture(renderer);
+                    stopMusic();
+                }
+            }
+
+            // return and mainmenu buttons
+            if (!returnButton.checkMousein()) returnButton.mousein = false;
+            else if (e.type == SDL_MOUSEBUTTONDOWN) return;
+            if (!mainmenuButton.checkMousein()) mainmenuButton.mousein = false;
+            else if (e.type == SDL_MOUSEBUTTONDOWN) {
+                quitGame = true;
+                isstartPage = true;
+                resetMusic();
+                return;
+            }
+        }
+        SDL_RenderPresent(renderer);
+    }
+}
+
 void Game::playGame() {
-    double timeperTile = 1.0 * timeClock * 1000 / timeLiquid.dest.w;
+    double timeperTile = 1.0 * timeClock / timeLiquid.dest.w;
     double curTime = SDL_GetTicks();
 
+    playingMusic();
+
     while (totalUnfinished) {
+        if (quit) return;
+        if (quitGame) return;
+
+        // Time up
+        if (timeClip.w <= 0) {
+            quitGame = true;
+            stopMusic();
+            resetMusic();
+            gameoverSound.playChunk();
+            SDL_Delay(2000);
+            return;
+        }
+        // check still playing music
         playingMusic();
+        // time decay
         timeDecay(timeperTile, curTime);
 
         SDL_Event e;
@@ -509,8 +627,28 @@ void Game::playGame() {
                 return;
             }
             if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+                // musicButton
+                if (e.type == SDL_MOUSEBUTTONDOWN && musicButton.checkMousein()) {
+                    if (Mix_PausedMusic()) {
+                        unmuteMusic.drawTexture(renderer);
+                        continueMusic();
+                    }
+                    else {
+                        muteMusic.drawTexture(renderer);
+                        stopMusic();
+                    }
+                }
+                // pauseButton
+                if (e.type == SDL_MOUSEBUTTONDOWN && pauseButton.checkMousein()) {
+                    pauseGamePls();
+                    for (int i = 1; i <= sz; i++)
+                        for (int j = 1; j <= sz; j++) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].buttonState]);
+                    curTime = SDL_GetTicks();
+                    continue;
+                }
+
                 // if move out the table => rollback
-                if (checkMouseouttable() && !rollbackList.empty()) {
+                if (!rollbackList.empty() && checkMouseouttable()) {
                     RollBack();
                     continue;
                 }
@@ -554,7 +692,7 @@ void Game::playGame() {
 
                             saveUnfinished = totalUnfinished;
                             // start a path
-                            if (e.type == SDL_MOUSEBUTTONDOWN && a[i][j].buttonState != 163 && a[i][j].buttonState % 18 == 1) {
+                            if (e.type == SDL_MOUSEBUTTONDOWN && a[i][j].buttonState < 163 && a[i][j].buttonState % 18 == 1) {
                                 rollbackList.push({ &a[i][j], a[i][j].buttonState });
 
                                 // save the curren color of the path
@@ -566,6 +704,13 @@ void Game::playGame() {
                             }
                         }
                         else {
+                            // if move into goal button and mouseup => save the path
+                            if (e.type == SDL_MOUSEBUTTONUP && rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
+                                completepathChunk.playChunk();
+                                Successful();
+                                continue;
+                            }
+
                             // if mouse up middle of path => wrong path
                             if (e.type == SDL_MOUSEBUTTONUP) {
                                 RollBack();
@@ -583,30 +728,30 @@ void Game::playGame() {
                                 continue;
                             }
 
-                            // if move into goal button => save the path
-                            if (a[i][j].buttonState == curColor) {
-                                completepathChunk.playChunk();
-                                getNextstate(rollbackList.top().saveButton, &a[i][j], true);
-                                Successful();
-                                //cout << "goal" << endl;
-                                continue;
-                            }
-
                             //if move into a previous button => rollback once
                             if (rollbackList.size() >= 2 && &a[i][j] == getSecondbutton()) {
                                 RollBackOneButton();
                                 continue;
                             }
 
-                            // if move into a button that != Blank & != Bridge => wrong path
-                            if (a[i][j].buttonState && a[i][j].buttonState < 164) {
+                            // If standing in goal button but move into a new button => save the path
+                            if (rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
+                                completepathChunk.playChunk();
+                                Successful();
+                                continue;
+                            }
+
+                            // if move into a button that != Blank, != Bridge, ! Goal => wrong path
+                            if (a[i][j].buttonState && a[i][j].buttonState != curColor && a[i][j].buttonState < 164) {
                                 //cout << "button that != Blank" << endl;
                                 RollBack();
                                 continue;
                             }
 
+
                             //cout << "getNextstate" << endl;
-                            getNextstate(rollbackList.top().saveButton, &a[i][j], false);
+                            if (a[i][j].buttonState != curColor) getNextstate(rollbackList.top().saveButton, &a[i][j], false);
+                            else getNextstate(rollbackList.top().saveButton, &a[i][j], true);
 
                         }
                     }
@@ -614,14 +759,24 @@ void Game::playGame() {
             SDL_RenderPresent(renderer);
         }
     }
+    Successful();
     completelevelChunk.playChunk();
     SDL_Delay(500);
 }
 
+// balance things
+// size          0  1  2  3  4  5  6  7   8  9
+int easy[10] = { 0, 0, 0, 0, 0, 15, 8, 14, 7, 13 };
+// size            0  1  2  3   4  5   6   7   8   9
+int normal[10] = { 0, 0, 0, 0, 20, 20, 20, 25, 30, 35 };
+// size          0  1  2  3  4  5  6   7   8   9
+int hard[10] = { 0, 0, 0, 0, 0, 30, 30, 35, 40, 45 };
+
 void Game::gameStart() {
     playingMusic();
-    //loadLevel("../level/5normal10.txt");
-    //playGame();
+    //    loadLevel("../level/9hard3.txt");
+    //  timeClock = 40000;
+    // playGame();
     for (int i = 4; i <= 9; i++)
         for (int j = 1; j <= 12; j++)
         {
@@ -629,20 +784,26 @@ void Game::gameStart() {
                 string name = "../level/" + to_string(i);
                 name += "easy" + to_string(j) + ".txt";
                 if (loadLevel(name.c_str())) {
+                    timeClock = easy[i] * 1000;
                     playGame();
                     if (quit == true) return;
+                    if (quitGame == true) return;
                 }
                 name = "../level/" + to_string(i);
                 name += "normal" + to_string(j) + ".txt";
                 if (loadLevel(name.c_str())) {
+                    timeClock = normal[i] * 1000;
                     playGame();
                     if (quit == true) return;
+                    if (quitGame == true) return;
                 }
                 name = "../level/" + to_string(i);
                 name += "hard" + to_string(j) + ".txt";
                 if (loadLevel(name.c_str())) {
+                    timeClock = hard[i] * 1000;
                     playGame();
                     if (quit == true) return;
+                    if (quitGame == true) return;
                 }
             }
         }
@@ -671,10 +832,11 @@ void Game::gameLoop() {
             {
                 quit = true;
             }
-            if (!playButton.checkMousein()) playButton.mousein = false;
-            if (!scoreButton.checkMousein()) scoreButton.mousein = false;
-            if (playButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+            if (isstartPage && !playButton.checkMousein()) playButton.mousein = false;
+            if (isstartPage && !scoreButton.checkMousein()) scoreButton.mousein = false;
+            if (isstartPage && playButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
                 isstartPage = false;
+                quitGame = false;
                 gameStart();
             }
         }
@@ -689,6 +851,11 @@ void Game::gameLoop() {
                 scoreButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
                 chooseScore.drawTexture(renderer);
             }
+            SDL_RenderPresent(renderer);
+        }
+        else {
+            SDL_RenderClear(renderer);
+            gameOver.drawTexture(renderer);
             SDL_RenderPresent(renderer);
         }
     }

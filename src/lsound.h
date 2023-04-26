@@ -23,13 +23,4 @@ public:
 
     //Playing music
     void playMusic(int loop);
-
-    //Pause music
-    void pauseMusic();
-
-    //Resume music
-    void resumeMusic();
-
-    //Stop playing music
-    void stopMusic();
 };
