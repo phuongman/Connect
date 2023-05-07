@@ -518,7 +518,7 @@ bool Game::loadLevel(const char* path) {
     ifstream curLevel(path);
     if (!curLevel) return false;
 
-    cout << path << endl;
+    // cout << path << endl;
     random_shuffle(colorList + 1, colorList + sizeColorlist + 1);
 
     SDL_RenderClear(renderer);
