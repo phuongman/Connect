@@ -5,13 +5,13 @@ const int windowHeight = 1000;
 const int szTable = 600;
 const int xTable = ((windowWidth - szTable) / 2 + 1);
 const int yTable = ((windowHeight - szTable) / 2 + 1);
-int xClock, yClock, xtimeLiquid;
-bool quit = false, isstartPage = true, islosePage = false, quitGame = false;
+int xClock, yClock, xtimeLiquid, cntRound;
+bool quit = false, isstartPage = true, islosePage = false, iswinPage = false, quitGame = false;
 
 // image things
 SDL_Rect buttonClips[170];
-Texture mainImage, tableBorder, mainPage, choosePlay, chooseScore, gameOver, topThings, muteMusic, unmuteMusic;
-Texture pauseGame, chooseReturn, chooseMainMenu;
+Texture mainImage, tableBorder, mainPage, choosePlay, chooseScore, gameOver, topThings, muteMusic, unmuteMusic, youwin, chooseMainMenuyouwin;
+Texture pauseGame, chooseReturn, chooseMainMenu, chooseRename, topScorePaper, chooseExitTopScore, scorePlace, chooseMainMenuGameOver;
 
 // clock things
 SDL_Rect timeClip;
@@ -20,21 +20,28 @@ Texture Clock, timeLiquid, onlyClock;
 
 // button things
 int buttonSize = 150, sz, totalUnfinished, curColor, saveUnfinished;
-LButton a[10][10], playButton, scoreButton, musicButton, pauseButton, returnButton, mainmenuButton;
+LButton a[10][10], playButton, scoreButton, musicButton, pauseButton, returnButton, mainmenuButton, renameButton, exitTopScore, OK, mainmenuGameOverButton, mainmenuYouWinButton;
 int colorList[10], sizeColorlist;
 /*
     1: saveButton
     2: oldbuttonState: state of saveButton
 */
 stack <dataRollback> rollbackList;
+vector <dataSaveTopScore> saveTopScore;
 
 // sound things
 const int totalSound = 4;
-LSound completepathChunk, completelevelChunk, chooseChunk, chooseChunk1, soundtrack[10], gameoverSound;
+LSound completepathChunk, completelevelChunk, chooseChunk, chooseChunk1, soundtrack[10], gameoverSound, winSound;
 int cntMusic = 1e9, soundOrder[totalSound + 1];
 
-// ttf things
-Texture playerName;
+// text things
+string playerName;
+Texture scoreOnScreen, renamePage, chooseOK, gameOverScore, numRound;
+int playerScore, levelScore;
+
+// level things
+vector <int> easy[10], normal[10], hard[10];
+int numEasy[10], numNormal[10], numHard[10];
 
 Game::Game(SDL_Window* gWindow, SDL_Renderer* gRenderer)
 {
@@ -50,8 +57,8 @@ Game::~Game() {
     window = NULL;
     SDL_DestroyRenderer(renderer);
     renderer = NULL;
-    TTF_CloseFont(font);
-    font = NULL;
+    TTF_CloseFont(playerNameFont);
+    playerNameFont = NULL;
 }
 
 bool Game::loadMedia() {
@@ -85,6 +92,9 @@ bool Game::loadMedia() {
         success = false;
     }
     if (!gameoverSound.loadChunk("../sound/gameoverSound.mp3")) {
+        success = false;
+    }
+    if (!winSound.loadChunk("../sound/New_record.mp3")) {
         success = false;
     }
     for (int i = 0; i < totalSound; i++) soundOrder[i] = i;
@@ -147,6 +157,34 @@ bool Game::loadMedia() {
     if (!chooseMainMenu.loadTexture(renderer, "../images/chooseMainMenu.png")) {
         success = false;
     }
+    if (!chooseRename.loadTexture(renderer, "../images/chooseRename.png")) {
+        success = false;
+    }
+    if (!topScorePaper.loadTexture(renderer, "../images/topScorePaper.png")) {
+        success = false;
+    }
+    if (!chooseExitTopScore.loadTexture(renderer, "../images/chooseExitTopScore.png")) {
+        success = false;
+    }
+    if (!scorePlace.loadTexture(renderer, "../images/scorePlace.png")) {
+        success = false;
+    }
+    if (!renamePage.loadTexture(renderer, "../images/renamePage.png")) {
+        success = false;
+    }
+    if (!chooseMainMenuGameOver.loadTexture(renderer, "../images/chooseMainMenuGameOver.png")) {
+        success = false;
+    }
+    if (!chooseOK.loadTexture(renderer, "../images/chooseOK.png")) {
+        success = false;
+    }
+    if (!youwin.loadTexture(renderer, "../images/youwin.png")) {
+        success = false;
+    }
+    if (!chooseMainMenuyouwin.loadTexture(renderer, "../images/chooseMainMenuyouwin.png")) {
+        success = false;
+    }
+    OK.setPosition(427, 23, 46, 32);
 
     // clock, timeliquid things
     xClock = ((windowWidth - Clock.dest.w) / 2 + 1);
@@ -167,10 +205,16 @@ bool Game::loadMedia() {
     chooseScore.setDest(0, 0, windowWidth, windowHeight);
     playButton.setPosition(256, 532, 166, 98);
     scoreButton.setPosition(238, 647, 191, 76);
+    renameButton.setPosition(0, 0, 152, 52);
+    exitTopScore.setPosition(543, 258, 36, 32);
 
     // playPage things
     returnButton.setPosition(185, 352, 339, 115);
     mainmenuButton.setPosition(147, 539, 440, 119);
+
+    // gameOver and youwin things
+    mainmenuGameOverButton.setPosition(231, 810, 237, 70);
+    mainmenuYouWinButton.setPosition(231, 810, 237, 70);
 
     //music and menu button
     musicButton.setPosition(539, 49, 43, 43);
@@ -198,32 +242,257 @@ bool Game::loadMedia() {
     }
 
     // ttf things
-    // font = TTF_OpenFont("../ttf/Bitterbrush DEMO.otf", 30);
-    //font = TTF_OpenFont("../ttf/Baloo-Regular.ttf", 60);
-    font = TTF_OpenFont("../ttf/Pacifico-Regular.ttf", 40);
-    // font = TTF_OpenFont("../ttf/NotoMono-Regular.ttf", 60);
-    // font = TTF_OpenFont("../ttf/DroidSansMono.ttf", 60);
-    // font = TTF_OpenFont("../ttf/ShortBaby-Mg2w.ttf", 60);
-    if (font == NULL)
+    playerNameFont = TTF_OpenFont("../ttf/Pacifico-Regular.ttf", 30);
+    if (playerNameFont == NULL)
     {
-        printf("Failed to load lazy font! SDL_ttf Error: %s\n", TTF_GetError());
         success = false;
     }
-    else
+
+    topScoreFont = TTF_OpenFont("../ttf/Pacifico-Regular.ttf", 36);
+    if (topScoreFont == NULL)
     {
-        //Render text
-        SDL_Color textColor = { 0, 0, 0 };
-        if (!playerName.loadFromRenderedText(renderer, font, "Lợi Vua Nối 342689", textColor))
-        {
-            printf("Failed to render text texture!\n");
-            success = false;
-        }
+        success = false;
     }
+
+    scoreFont = TTF_OpenFont("../ttf/Baloo-Regular.ttf", 38);
+    if (scoreFont == NULL) {
+        success = false;
+    }
+
+    roundFont = TTF_OpenFont("../ttf/Baloo-Regular.ttf", 40);
+    if (roundFont == NULL) {
+        success = false;
+    }
+
+    gameOverFont = TTF_OpenFont("../ttf/Baloo-Regular.ttf", 130);
+    if (gameOverFont == NULL) {
+        success = false;
+    }
+
+    if (!readTopScore()) {
+        success = false;
+    }
+    if (!readPlayerName()) {
+        success = false;
+    }
+
+    // level things
+    numNormal[4] = 3;
+    numEasy[5] = 4;
+    numHard[5] = 2;
+    numNormal[5] = 11;
+    numEasy[6] = 3;
+    numHard[6] = 3;
+    numNormal[6] = 14;
+    numEasy[7] = 4;
+    numHard[7] = 3;
+    numNormal[7] = 16;
+    numEasy[8] = 2;
+    numHard[8] = 5;
+    numNormal[8] = 16;
+    numEasy[9] = 1;
+    numHard[9] = 3;
+    numNormal[9] = 10;
+
+    for (int i = 1; i <= 3; i++) normal[4].push_back(i);
+    for (int i = 1; i <= 7; i++) easy[5].push_back(i);
+    for (int i = 1; i <= 2; i++) hard[5].push_back(i);
+    for (int i = 1; i <= 15; i++) normal[5].push_back(i);
+    for (int i = 1; i <= 3; i++) easy[6].push_back(i);
+    for (int i = 1; i <= 3; i++) hard[6].push_back(i);
+    for (int i = 1; i <= 15; i++) normal[6].push_back(i);
+    for (int i = 1; i <= 5; i++) easy[7].push_back(i);
+    for (int i = 1; i <= 4; i++) hard[7].push_back(i);
+    for (int i = 1; i <= 17; i++) normal[7].push_back(i);
+    for (int i = 1; i <= 2; i++) easy[8].push_back(i);
+    for (int i = 1; i <= 7; i++) hard[8].push_back(i);
+    for (int i = 1; i <= 16; i++) normal[8].push_back(i);
+    for (int i = 1; i <= 1; i++) easy[9].push_back(i);
+    for (int i = 1; i <= 3; i++) hard[9].push_back(i);
+    for (int i = 1; i <= 10; i++) normal[9].push_back(i);
 
     return success;
 }
 
-// just music things ._.   
+/*
+    playerName and Score things
+*/
+
+// read top Score from topScore.txt
+bool Game::readTopScore() {
+    ifstream file("topScore.txt");
+    if (!file.is_open()) {
+        cout << "Can't load top score" << endl;
+        return false;
+    }
+    string name;
+    int score;
+    for (int i = 0; i <= 4; i++) {
+        getline(file, name);
+        file >> score;
+        saveTopScore.push_back({ name, score });
+        getline(file, name);
+    }
+    file.close();
+    return true;
+}
+
+// save top Score in topScore.txt
+void Game::printTopScore() {
+    ofstream file("topScore.txt");
+    if (!file.is_open()) {
+        cout << "Can't open top score to save" << endl;
+        return;
+    }
+    for (int i = 0; i <= 4; i++) file << saveTopScore[i].name << endl << saveTopScore[i].score << endl;
+    file.close();
+}
+
+// render topScore to the screen
+void Game::topScoreRender() {
+    while (true) {
+        SDL_RenderClear(renderer);
+        topScorePaper.drawTexture(renderer);
+        SDL_Color textColor = { 0, 0, 0 };
+        Texture bestScore;
+        bestScore.loadFromRenderedText(renderer, topScoreFont, "Best Score", textColor);
+        bestScore.setDest(250, 260, bestScore.dest.w, bestScore.dest.h);
+        bestScore.drawTexture(renderer);
+        int x = 140, y = 340;
+        // render name
+        for (int i = 0; i <= 4; i++) {
+            Texture name;
+            name.loadFromRenderedText(renderer, topScoreFont, saveTopScore[i].name, textColor);
+            name.setDest(x, y, name.dest.w, name.dest.h);
+            name.drawTexture(renderer);
+            y += name.dest.h + 8;
+        }
+        scorePlace.drawTexture(renderer); // prepare when when some name are too long
+        x = 140, y = 340;
+        // render score
+        for (int i = 0; i <= 4; i++) {
+            Texture score;
+            score.loadFromRenderedText(renderer, topScoreFont, to_string(saveTopScore[i].score), textColor);
+            score.setDest(x + 350, y, score.dest.w, score.dest.h);
+            score.drawTexture(renderer);
+            y += score.dest.h + 8;
+        }
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+                return;
+            }
+            if (e.type == SDL_MOUSEBUTTONDOWN && exitTopScore.checkMousein()) return;
+            if (!exitTopScore.checkMousein()) exitTopScore.mousein = false;
+        }
+        if (exitTopScore.checkMousein()) {
+            exitTopScore.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+            chooseExitTopScore.drawTexture(renderer);
+        }
+        SDL_RenderPresent(renderer);
+    }
+}
+
+// render current score to the screen
+void Game::renderScoreInGame() {
+    SDL_Color textColor = { 0, 0, 0 };
+    scoreOnScreen.loadFromRenderedText(renderer, scoreFont, to_string(playerScore), textColor);
+    scoreOnScreen.setDest((292 - 47 - scoreOnScreen.dest.w) / 2 + 47, (95 - 46 - scoreOnScreen.dest.h) / 2 + 46, scoreOnScreen.dest.w, scoreOnScreen.dest.h);
+    scoreOnScreen.drawTexture(renderer);
+}
+
+// read playerName from playerName.txt
+bool Game::readPlayerName() {
+    ifstream file("playerName.txt");
+    if (!file.is_open()) {
+        cout << "Can't load player name" << endl;
+        return false;
+    }
+    getline(file, playerName);
+    file.close();
+    return true;
+}
+
+// make | disappear :D
+void Game::updateName(Texture& name, Texture& name1) {
+    SDL_Color textColor = { 0, 0, 0 };
+    name1.loadFromRenderedText(renderer, playerNameFont, playerName + "|", textColor);
+    name1.setDest(30, 15, name1.dest.w, name1.dest.h);
+    name.loadFromRenderedText(renderer, playerNameFont, playerName, textColor);
+    name.setDest(30, 15, name.dest.w, name.dest.h);
+}
+
+void Game::renameRender() {
+    Texture name, name1;
+    updateName(name, name1);
+    int cnt = 0;
+
+    SDL_StartTextInput();
+
+    while (true) {
+        cnt++;
+        if (cnt == 10000) cnt = 0;
+        renamePage.drawTexture(renderer);
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+                return;
+            }
+            else if (e.type == SDL_KEYDOWN) {
+                if (e.key.keysym.sym == SDLK_BACKSPACE && playerName.length() > 0) {
+                    playerName.pop_back();
+                    updateName(name, name1);
+                }
+                else if (e.key.keysym.sym == SDLK_RETURN) {
+                    if (playerName.length() == 0) playerName = "Random Noob";
+                    SDL_StopTextInput();
+                    return;
+                }
+            }
+            else if (e.type == SDL_TEXTINPUT && playerName.length() <= 17) {
+                playerName += e.text.text;
+                updateName(name, name1);
+            }
+
+            if (!OK.checkMousein()) OK.mousein = false;
+            if (OK.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+                if (playerName.length() == 0) playerName = "Random Noob";
+                SDL_StopTextInput();
+                return;
+            }
+        }
+        if (OK.checkMousein()) {
+            OK.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+            chooseOK.drawTexture(renderer);
+        }
+        if (cnt < 5000) name1.drawTexture(renderer);
+        else name.drawTexture(renderer);
+        SDL_RenderPresent(renderer);
+    }
+}
+
+// save playerName in playerName.txt
+void Game::printPlayerName() {
+    ofstream file("playerName.txt");
+    if (!file.is_open()) {
+        cout << "Can't open top score to save" << endl;
+        return;
+    }
+    file << playerName;
+    file.close();
+}
+
+void Game::updateTopScore() {
+    saveTopScore.push_back({ playerName, playerScore });
+    sort(saveTopScore.begin(), saveTopScore.end());
+    saveTopScore.pop_back();
+}
+
+/*
+    just music things ._.
+*/
 void Game::stopMusic()
 {
     if (Mix_PausedMusic() == 0) Mix_PauseMusic();
@@ -247,10 +516,6 @@ void Game::playingMusic() {
 // load level ._.
 bool Game::loadLevel(const char* path) {
     ifstream curLevel(path);
-    /*if (!curLevel) {
-        cout << "Can't load level: " << path << endl;
-        return;
-    }*/
     if (!curLevel) return false;
 
     cout << path << endl;
@@ -286,6 +551,10 @@ bool Game::loadLevel(const char* path) {
     SDL_RenderPresent(renderer);
     return true;
 }
+
+/*
+    Logic game
+*/
 
 void Game::resetTimeliquid() {
     timeLiquid.dest.w = lenTimeliquid;
@@ -389,10 +658,7 @@ LButton* Game::getSecondbutton() {
     return secondButton;
 }
 
-
-/*
-    update curButtonState = updateState
-*/
+// update curButtonState = updateState
 void Game::updateButton(LButton* curButton, int updateState) {
     // normalBridge
     if (updateState == 164) {
@@ -413,7 +679,7 @@ void Game::updateButton(LButton* curButton, int updateState) {
         if (curButton->buttonState == 166) {
             curButton->render(renderer, mainImage, &buttonClips[curColor + 17]);
         }
-        else {
+        else if (curButton->buttonState == 167) {
             curButton->render(renderer, mainImage, &buttonClips[curColor + 16]);
         }
     }
@@ -552,6 +818,7 @@ void Game::getNextstate(LButton* prevButton, LButton* curButton, bool goal) {
     else updateButton(curButton, curColor + 2 + (posState + 2) % 4);
 }
 
+// pause game
 void Game::pauseGamePls() {
     while (true) {
         pauseGame.drawTexture(renderer);
@@ -601,17 +868,25 @@ void Game::playGame() {
     double curTime = SDL_GetTicks();
 
     playingMusic();
+    renderScoreInGame();
+    cntRound++;
+    SDL_Color textColor = { 0, 0, 0 };
+    numRound.loadFromRenderedText(renderer, roundFont, "ROUND: " + to_string(cntRound), textColor);
+    numRound.setDest(470, 130, numRound.dest.w, numRound.dest.h);
+    numRound.drawTexture(renderer);
 
     while (totalUnfinished) {
         if (quit) return;
         if (quitGame) return;
 
-        // Time up
+        // Time up (lose)
         if (timeClip.w <= 0) {
             quitGame = true;
             stopMusic();
             resetMusic();
             gameoverSound.playChunk();
+            updateTopScore();
+            islosePage = true;
             SDL_Delay(2000);
             return;
         }
@@ -761,52 +1036,69 @@ void Game::playGame() {
     }
     Successful();
     completelevelChunk.playChunk();
+
+    playerScore += (int)(1.0 * timeClip.w / lenTimeliquid * levelScore);
     SDL_Delay(500);
 }
 
 // balance things
-// size          0  1  2  3  4  5  6  7   8  9
-int easy[10] = { 0, 0, 0, 0, 0, 15, 8, 14, 7, 13 };
-// size            0  1  2  3   4  5   6   7   8   9
-int normal[10] = { 0, 0, 0, 0, 20, 20, 20, 25, 30, 35 };
-// size          0  1  2  3  4  5  6   7   8   9
-int hard[10] = { 0, 0, 0, 0, 0, 30, 30, 35, 40, 45 };
+// size              0  1  2  3  4  5   6   7   8   9
+int easyTime[10] = { 0, 0, 0, 0, 0, 15, 15, 15, 15, 20 };
+// size                0  1  2  3  4   5   6   7   8   9
+int normalTime[10] = { 0, 0, 0, 0, 20, 20, 20, 25, 30, 35 };
+// size              0  1  2  3  4   5   6   7   8   9
+int hardTime[10] = { 0, 0, 0, 0, 0, 35, 40, 40, 40, 45 };
+
+int easyScore[10] = { 0, 0, 0, 0, 0, 200, 300, 400, 500, 600 };
+int normalScore[10] = { 0, 0, 0, 0, 100, 200, 300, 400, 500, 600 };
+int hardScore[10] = { 0, 0, 0, 0, 0, 400, 600, 800, 1000, 1200 };
 
 void Game::gameStart() {
+    cntRound = 0;
+    Successful();
+    playerScore = 0;
     playingMusic();
-    //    loadLevel("../level/9hard3.txt");
-    //  timeClock = 40000;
-    // playGame();
-    for (int i = 4; i <= 9; i++)
-        for (int j = 1; j <= 12; j++)
-        {
-            {
-                string name = "../level/" + to_string(i);
-                name += "easy" + to_string(j) + ".txt";
-                if (loadLevel(name.c_str())) {
-                    timeClock = easy[i] * 1000;
-                    playGame();
-                    if (quit == true) return;
-                    if (quitGame == true) return;
-                }
-                name = "../level/" + to_string(i);
-                name += "normal" + to_string(j) + ".txt";
-                if (loadLevel(name.c_str())) {
-                    timeClock = normal[i] * 1000;
-                    playGame();
-                    if (quit == true) return;
-                    if (quitGame == true) return;
-                }
-                name = "../level/" + to_string(i);
-                name += "hard" + to_string(j) + ".txt";
-                if (loadLevel(name.c_str())) {
-                    timeClock = hard[i] * 1000;
-                    playGame();
-                    if (quit == true) return;
-                    if (quitGame == true) return;
-                }
-            }
+    for (int i = 5; i <= 9; i++) {
+        random_shuffle(easy[i].begin(), easy[i].end());
+        random_shuffle(normal[i].begin(), normal[i].end());
+        random_shuffle(hard[i].begin(), hard[i].end());
+    }
+    vector <string> vecLevel;
+    for (int i = 4; i <= 9; i++) {
+        if (i == 4) {
+            for (int j = 1; j <= 3; j++) vecLevel.push_back("../level/" + to_string(i) + "normal" + to_string(j) + ".txt");
+            continue;
         }
+        vector <string> shufLevel;
+        for (int j = 1; j <= numEasy[i]; j++) shufLevel.push_back("../level/" + to_string(i) + "easy" + to_string(easy[i][j - 1]) + ".txt");
+        for (int j = 1; j <= numNormal[i]; j++) shufLevel.push_back("../level/" + to_string(i) + "normal" + to_string(normal[i][j - 1]) + ".txt");
+        random_shuffle(shufLevel.begin(), shufLevel.end());
+        for (auto x : shufLevel) vecLevel.push_back(x);
+
+        for (int j = 1; j <= numHard[i]; j++) vecLevel.push_back("../level/" + to_string(i) + "hard" + to_string(hard[i][j - 1]) + ".txt");
+    }
+    for (auto x : vecLevel) {
+        char state = x[10];
+        int sz = x[9] - '0';
+        if (loadLevel(x.c_str())) {
+            if (state == 'e') timeClock = easyTime[sz] * 1000, levelScore = easyScore[sz];
+            if (state == 'n') timeClock = normalTime[sz] * 1000, levelScore = normalScore[sz];
+            if (state == 'h') timeClock = hardTime[sz] * 1000, levelScore = hardScore[sz];
+            if (x == "../level/8easy2.txt") timeClock = 25000;
+            playGame();
+            if (x == "../level/8easy2.txt") SDL_Delay(1000);
+            if (quit == true) return;
+            if (quitGame == true) return;
+        }
+    }
+    // complete 100 levels (win)
+    stopMusic();
+    resetMusic();
+    winSound.playChunk();
+    updateTopScore();
+    iswinPage = true;
+    SDL_Delay(3000);
+    return;
 }
 
 void Game::gameLoop() {
@@ -832,12 +1124,42 @@ void Game::gameLoop() {
             {
                 quit = true;
             }
-            if (isstartPage && !playButton.checkMousein()) playButton.mousein = false;
-            if (isstartPage && !scoreButton.checkMousein()) scoreButton.mousein = false;
-            if (isstartPage && playButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
-                isstartPage = false;
-                quitGame = false;
-                gameStart();
+            if (isstartPage) {
+                if (!playButton.checkMousein()) playButton.mousein = false;
+                if (!scoreButton.checkMousein()) scoreButton.mousein = false;
+                if (!renameButton.checkMousein()) renameButton.mousein = false;
+                // click play
+                if (playButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+                    isstartPage = false;
+                    quitGame = false;
+                    gameStart();
+                }
+                // click rename
+                if (renameButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+                    renameRender();
+                    continue;
+                }
+                // click score
+                if (scoreButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+                    topScoreRender();
+                    continue;
+                }
+            }
+            else if (islosePage) {
+                if (!mainmenuGameOverButton.checkMousein()) mainmenuGameOverButton.mousein = false;
+                // click main menu
+                if (mainmenuGameOverButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+                    isstartPage = true;
+                    islosePage = false;
+                }
+            }
+            else if (iswinPage) {
+                if (!mainmenuYouWinButton.checkMousein()) mainmenuYouWinButton.mousein = false;
+                // click main menu
+                if (mainmenuYouWinButton.checkMousein() && e.type == SDL_MOUSEBUTTONDOWN) {
+                    isstartPage = true;
+                    iswinPage = false;
+                }
             }
         }
         if (isstartPage) {
@@ -851,14 +1173,45 @@ void Game::gameLoop() {
                 scoreButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
                 chooseScore.drawTexture(renderer);
             }
+            if (renameButton.checkMousein()) {
+                renameButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+                chooseRename.drawTexture(renderer);
+            }
             SDL_RenderPresent(renderer);
         }
-        else {
+        else if (islosePage) {
             SDL_RenderClear(renderer);
             gameOver.drawTexture(renderer);
+            if (mainmenuGameOverButton.checkMousein()) {
+                mainmenuGameOverButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+                chooseMainMenuGameOver.drawTexture(renderer);
+            }
+            SDL_Color textColor = { 0, 0, 0 };
+            gameOverScore.loadFromRenderedText(renderer, gameOverFont, to_string(playerScore), textColor);
+            gameOverScore.setDest((windowWidth - gameOverScore.dest.w) / 2 + 1, 530, gameOverScore.dest.w, gameOverScore.dest.h);
+            gameOverScore.drawTexture(renderer);
+            SDL_RenderPresent(renderer);
+        }
+        else if (iswinPage) {
+            SDL_RenderClear(renderer);
+            youwin.drawTexture(renderer);
+            if (mainmenuYouWinButton.checkMousein()) {
+                mainmenuYouWinButton.checkchunkwhenMousein(&chooseChunk, &chooseChunk1);
+                chooseMainMenuyouwin.drawTexture(renderer);
+            }
+            SDL_Color textColor = { 0, 0, 0 };
+            gameOverScore.loadFromRenderedText(renderer, gameOverFont, to_string(playerScore), textColor);
+            gameOverScore.setDest((windowWidth - gameOverScore.dest.w) / 2 + 1, 530, gameOverScore.dest.w, gameOverScore.dest.h);
+            gameOverScore.drawTexture(renderer);
             SDL_RenderPresent(renderer);
         }
     }
+
+    free();
 }
 
+void Game::free() {
+    printPlayerName();
+    printTopScore();
+}
 
