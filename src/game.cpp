@@ -59,6 +59,14 @@ Game::~Game() {
     renderer = NULL;
     TTF_CloseFont(playerNameFont);
     playerNameFont = NULL;
+    TTF_CloseFont(scoreFont);
+    scoreFont = NULL;
+    TTF_CloseFont(topScoreFont);
+    topScoreFont = NULL;
+    TTF_CloseFont(gameOverFont);
+    gameOverFont = NULL;
+    TTF_CloseFont(roundFont);
+    roundFont = NULL;
 }
 
 bool Game::loadMedia() {
@@ -863,7 +871,7 @@ void Game::pauseGamePls() {
     }
 }
 
-void Game::playGame() {
+/*void Game::playGame() {
     double timeperTile = 1.0 * timeClock / timeLiquid.dest.w;
     double curTime = SDL_GetTicks();
 
@@ -1030,6 +1038,235 @@ void Game::playGame() {
 
                         }
                     }
+            }
+            SDL_RenderPresent(renderer);
+        }
+    }
+    Successful();
+    completelevelChunk.playChunk();
+
+    playerScore += (int)(1.0 * timeClip.w / lenTimeliquid * levelScore);
+    SDL_Delay(500);
+}*/
+
+void Game::playGame() {
+    double timeperTile = 1.0 * timeClock / timeLiquid.dest.w;
+    double curTime = SDL_GetTicks();
+
+    playingMusic();
+    renderScoreInGame();
+    cntRound++;
+    SDL_Color textColor = { 0, 0, 0 };
+    numRound.loadFromRenderedText(renderer, roundFont, "ROUND: " + to_string(cntRound), textColor);
+    numRound.setDest(470, 130, numRound.dest.w, numRound.dest.h);
+    numRound.drawTexture(renderer);
+
+    bool continuePath = false;
+
+    while (totalUnfinished) {
+        if (quit) return;
+        if (quitGame) return;
+
+        // Time up (lose)
+        if (timeClip.w <= 0) {
+            quitGame = true;
+            stopMusic();
+            resetMusic();
+            gameoverSound.playChunk();
+            updateTopScore();
+            islosePage = true;
+            SDL_Delay(2000);
+            return;
+        }
+        // check still playing music
+        playingMusic();
+        // time decay
+        timeDecay(timeperTile, curTime);
+
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                quit = true;
+                return;
+            }
+            if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
+                // musicButton
+                if (e.type == SDL_MOUSEBUTTONDOWN && musicButton.checkMousein()) {
+                    if (Mix_PausedMusic()) {
+                        unmuteMusic.drawTexture(renderer);
+                        continueMusic();
+                    }
+                    else {
+                        muteMusic.drawTexture(renderer);
+                        stopMusic();
+                    }
+                }
+                // pauseButton
+                if (e.type == SDL_MOUSEBUTTONDOWN && pauseButton.checkMousein()) {
+                    pauseGamePls();
+                    for (int i = 1; i <= sz; i++)
+                        for (int j = 1; j <= sz; j++) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].buttonState]);
+                    curTime = SDL_GetTicks();
+                    continue;
+                }
+
+                // If standing in goal button but move into a new button => save the path
+                if (checkMouseouttable() && rollbackList.size() > 1 && rollbackList.top().oldbuttonState == curColor) {
+                    completepathChunk.playChunk();
+                    Successful();
+                    continue;
+                }
+
+                // if move out the table => rollback
+                if (!rollbackList.empty() && checkMouseouttable()) {
+                    continuePath = false;
+                    continue;
+                }
+
+                for (int i = 1; i <= sz; i++) {
+                    bool BREAK = false;
+                    for (int j = 1; j <= sz; j++) if (a[i][j].checkMousein()) {
+                        if (rollbackList.empty()) {
+                            // deleted path
+                            if (e.type == SDL_MOUSEBUTTONDOWN && a[i][j].buttonState < 164 && a[i][j].buttonState % 18 >= 3 && a[i][j].buttonState % 18 <= 6) {
+                                // left and right of the same color
+                                int le = a[i][j].buttonState - a[i][j].buttonState % 18;
+                                int ri = le + 18;
+                                for (int u = 1; u <= sz; u++)
+                                    for (int v = 1; v <= sz; v++) if (a[u][v].buttonState > le && a[u][v].buttonState <= ri) {
+                                        if (a[u][v].buttonState % 18 < 3 || a[u][v].buttonState % 18 > 6) updateButton(&a[u][v], 0);
+                                        else updateButton(&a[u][v], le + 1);
+                                        totalUnfinished++;
+                                    }
+                                    else if (a[u][v].buttonState > 164) {
+                                        if (a[u][v].buttonState == 166 && a[u][v].bridgeleftrightColor == le + 1) {
+                                            totalUnfinished++;
+                                            updateButton(&a[u][v], 164);
+                                        }
+                                        if (a[u][v].buttonState == 167 && a[u][v].bridgeupdownColor == le + 1) {
+                                            totalUnfinished++;
+                                            updateButton(&a[u][v], 164);
+                                        }
+                                        if (a[u][v].buttonState == 168) {
+                                            if (a[u][v].bridgeleftrightColor == le + 1) {
+                                                totalUnfinished++;
+                                                updateButton(&a[u][v], 167);
+                                            }
+                                            if (a[u][v].bridgeupdownColor == le + 1) {
+                                                totalUnfinished++;
+                                                updateButton(&a[u][v], 166);
+                                            }
+                                        }
+                                    }
+                            }
+
+                            saveUnfinished = totalUnfinished;
+                            // start a path
+                            if (e.type == SDL_MOUSEBUTTONDOWN && a[i][j].buttonState < 163 && a[i][j].buttonState % 18 == 1) {
+                                rollbackList.push({ &a[i][j], a[i][j].buttonState });
+
+                                // save the curren color of the path
+                                curColor = a[i][j].buttonState;
+
+                                totalUnfinished--;
+
+                                updateButton(&a[i][j], a[i][j].buttonState + 1);
+
+                                continuePath = true;
+                                BREAK = true;
+                                break;
+                            }
+                        }
+                        else {
+                            //cout << continuePath << endl;
+                            if (continuePath) {
+
+                                // if move into goal button and mouseup => save the path
+                                if (e.type == SDL_MOUSEBUTTONUP && rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
+                                    completepathChunk.playChunk();
+                                    Successful();
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                // if mouse up middle of path => wrong path
+                                if (e.type == SDL_MOUSEBUTTONUP) {
+                                    continuePath = false;
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                // if curbutton == stack top button => do nothing
+                                if (&a[i][j] == rollbackList.top().saveButton) {
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                // if move at bridge => wrong path
+                                if (checkBridge(&a[i][j]) == false) {
+                                    //cout << "Bridge false" << endl;
+                                    continuePath = false;
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                //if move into a previous button => rollback once
+                                if (rollbackList.size() >= 2 && &a[i][j] == getSecondbutton()) {
+                                    RollBackOneButton();
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                // If standing in goal button but move into a new button => save the path
+                                if (rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
+                                    completepathChunk.playChunk();
+                                    Successful();
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                // if move into a button that != Blank, != Bridge, ! Goal => wrong path
+                                if (a[i][j].buttonState && a[i][j].buttonState != curColor && a[i][j].buttonState < 164) {
+                                    //cout << "button that != Blank" << endl;
+                                    continuePath = false;
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                //cout << "getNextstate" << endl;
+                                if (a[i][j].buttonState != curColor) getNextstate(rollbackList.top().saveButton, &a[i][j], false);
+                                else getNextstate(rollbackList.top().saveButton, &a[i][j], true);
+                            }
+                            else {
+                                if (e.type == SDL_MOUSEBUTTONDOWN && &a[i][j] != rollbackList.top().saveButton) {
+                                    RollBack();
+                                    saveUnfinished = totalUnfinished;
+                                    // start a path
+                                    if (a[i][j].buttonState < 163 && a[i][j].buttonState % 18 == 1) {
+                                        rollbackList.push({ &a[i][j], a[i][j].buttonState });
+
+                                        // save the curren color of the path
+                                        curColor = a[i][j].buttonState;
+
+                                        totalUnfinished--;
+
+                                        updateButton(&a[i][j], a[i][j].buttonState + 1);
+
+                                        continuePath = true;
+                                    }
+                                    BREAK = true;
+                                    break;
+                                }
+                                if (e.type == SDL_MOUSEBUTTONDOWN && &a[i][j] == rollbackList.top().saveButton) {
+                                    continuePath = true;
+                                    BREAK = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    if (BREAK) break;
+                }
             }
             SDL_RenderPresent(renderer);
         }
