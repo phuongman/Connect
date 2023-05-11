@@ -11,7 +11,9 @@ Bạn hãy nối các quả bóng cùng màu với nhau sao cho bảng được 
 
 
 ## Cách chơi
-Bạn tự tìm hiểu nha 😊
+* Nhấn giữ vào các ô hình tròn để bắt đầu nối.
+* Nối sao cho phủ kín bảng.
+* Thời gian dùng để xong 1 vàn càng ngắn thì điểm bạn nhận càng cao
 
 ## Cài đặt
 
