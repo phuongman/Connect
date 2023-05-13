@@ -51,6 +51,7 @@ public:
 
     void RollBackOneButton();
     void RollBack();
+    void RollBackToSpecificButton(LButton* specificButton);
     void Successful();
     LButton* getSecondbutton();
     void updateButton(LButton* curButton, int updateState);

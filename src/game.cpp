@@ -615,6 +615,19 @@ void Game::RollBack() {
     }
 }
 
+void Game::RollBackToSpecificButton(LButton* specificButton) {
+    int cnt = 0;
+    while (!rollbackList.empty()) {
+        LButton* curbutton = rollbackList.top().saveButton;
+        int oldbuttonSave = rollbackList.top().oldbuttonState;
+        rollbackList.pop();
+        updateButton(curbutton, oldbuttonSave);
+        cnt++;
+        if (cnt == 2) totalUnfinished++, cnt = 0;
+        if (curbutton == specificButton) return;
+    }
+}
+
 //check if mouse is out of the table
 bool Game::checkMouseouttable() {
     int x, y;
@@ -694,16 +707,6 @@ void Game::updateButton(LButton* curButton, int updateState) {
     else curButton->render(renderer, mainImage, &buttonClips[updateState]);
     curButton->buttonState = updateState;
 }
-
-/*
-    |  0     1      2      3      4      5     6     7       8       9  |
-    |Blank, Blue, Brown, Green, Orange, Pink, Red, Yellow, Violet, Block|
-    |Unselected, Selected, Up, Right, Down, Left, LineUp, LineRight, LineDown, LineLeft,  LineRightUp, LineRightDown, LineLeftDown, LineLeftUp, LineLeftRight, LineUpDown|
-    |   1           2      3    4       5     6     7       8           9         10            11          12              13            14          15            16
-    0 -> Blank
-    Blue: 1 -> 18
-    Brown: 19 -> 32
-*/
 
 /*
     prevButton is the previous button
@@ -871,183 +874,19 @@ void Game::pauseGamePls() {
     }
 }
 
-/*void Game::playGame() {
-    double timeperTile = 1.0 * timeClock / timeLiquid.dest.w;
-    double curTime = SDL_GetTicks();
-
-    playingMusic();
-    renderScoreInGame();
-    cntRound++;
-    SDL_Color textColor = { 0, 0, 0 };
-    numRound.loadFromRenderedText(renderer, roundFont, "ROUND: " + to_string(cntRound), textColor);
-    numRound.setDest(470, 130, numRound.dest.w, numRound.dest.h);
-    numRound.drawTexture(renderer);
-
-    while (totalUnfinished) {
-        if (quit) return;
-        if (quitGame) return;
-
-        // Time up (lose)
-        if (timeClip.w <= 0) {
-            quitGame = true;
-            stopMusic();
-            resetMusic();
-            gameoverSound.playChunk();
-            updateTopScore();
-            islosePage = true;
-            SDL_Delay(2000);
-            return;
-        }
-        // check still playing music
-        playingMusic();
-        // time decay
-        timeDecay(timeperTile, curTime);
-
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) {
-                quit = true;
-                return;
-            }
-            if (e.type == SDL_MOUSEMOTION || e.type == SDL_MOUSEBUTTONDOWN || e.type == SDL_MOUSEBUTTONUP) {
-                // musicButton
-                if (e.type == SDL_MOUSEBUTTONDOWN && musicButton.checkMousein()) {
-                    if (Mix_PausedMusic()) {
-                        unmuteMusic.drawTexture(renderer);
-                        continueMusic();
-                    }
-                    else {
-                        muteMusic.drawTexture(renderer);
-                        stopMusic();
-                    }
-                }
-                // pauseButton
-                if (e.type == SDL_MOUSEBUTTONDOWN && pauseButton.checkMousein()) {
-                    pauseGamePls();
-                    for (int i = 1; i <= sz; i++)
-                        for (int j = 1; j <= sz; j++) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].buttonState]);
-                    curTime = SDL_GetTicks();
-                    continue;
-                }
-
-                // if move out the table => rollback
-                if (!rollbackList.empty() && checkMouseouttable()) {
-                    RollBack();
-                    continue;
-                }
-
-                for (int i = 1; i <= sz; i++)
-                    for (int j = 1; j <= sz; j++) if (a[i][j].checkMousein()) {
-                        if (rollbackList.empty()) {
-                            // deleted path
-                            if (e.type == SDL_MOUSEBUTTONDOWN && a[i][j].buttonState < 164 && a[i][j].buttonState % 18 >= 3 && a[i][j].buttonState % 18 <= 6) {
-                                // left and right of the same color
-                                int le = a[i][j].buttonState - a[i][j].buttonState % 18;
-                                int ri = le + 18;
-                                for (int u = 1; u <= sz; u++)
-                                    for (int v = 1; v <= sz; v++) if (a[u][v].buttonState > le && a[u][v].buttonState <= ri) {
-                                        if (a[u][v].buttonState % 18 < 3 || a[u][v].buttonState % 18 > 6) updateButton(&a[u][v], 0);
-                                        else updateButton(&a[u][v], le + 1);
-                                        totalUnfinished++;
-                                    }
-                                    else if (a[u][v].buttonState > 164) {
-                                        if (a[u][v].buttonState == 166 && a[u][v].bridgeleftrightColor == le + 1) {
-                                            totalUnfinished++;
-                                            updateButton(&a[u][v], 164);
-                                        }
-                                        if (a[u][v].buttonState == 167 && a[u][v].bridgeupdownColor == le + 1) {
-                                            totalUnfinished++;
-                                            updateButton(&a[u][v], 164);
-                                        }
-                                        if (a[u][v].buttonState == 168) {
-                                            if (a[u][v].bridgeleftrightColor == le + 1) {
-                                                totalUnfinished++;
-                                                updateButton(&a[u][v], 167);
-                                            }
-                                            if (a[u][v].bridgeupdownColor == le + 1) {
-                                                totalUnfinished++;
-                                                updateButton(&a[u][v], 166);
-                                            }
-                                        }
-                                    }
-                                continue;
-                            }
-
-                            saveUnfinished = totalUnfinished;
-                            // start a path
-                            if (e.type == SDL_MOUSEBUTTONDOWN && a[i][j].buttonState < 163 && a[i][j].buttonState % 18 == 1) {
-                                rollbackList.push({ &a[i][j], a[i][j].buttonState });
-
-                                // save the curren color of the path
-                                curColor = a[i][j].buttonState;
-
-                                totalUnfinished--;
-
-                                updateButton(&a[i][j], a[i][j].buttonState + 1);
-                            }
-                        }
-                        else {
-                            // if move into goal button and mouseup => save the path
-                            if (e.type == SDL_MOUSEBUTTONUP && rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
-                                completepathChunk.playChunk();
-                                Successful();
-                                continue;
-                            }
-
-                            // if mouse up middle of path => wrong path
-                            if (e.type == SDL_MOUSEBUTTONUP) {
-                                RollBack();
-                                //cout << "mouse up middle" << endl;
-                                continue;
-                            }
-
-                            // if curbutton == stack top button => do nothing
-                            if (&a[i][j] == rollbackList.top().saveButton) continue;
-
-                            // if move at bridge => wrong path
-                            if (checkBridge(&a[i][j]) == false) {
-                                //cout << "Bridge false" << endl;
-                                RollBack();
-                                continue;
-                            }
-
-                            //if move into a previous button => rollback once
-                            if (rollbackList.size() >= 2 && &a[i][j] == getSecondbutton()) {
-                                RollBackOneButton();
-                                continue;
-                            }
-
-                            // If standing in goal button but move into a new button => save the path
-                            if (rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
-                                completepathChunk.playChunk();
-                                Successful();
-                                continue;
-                            }
-
-                            // if move into a button that != Blank, != Bridge, ! Goal => wrong path
-                            if (a[i][j].buttonState && a[i][j].buttonState != curColor && a[i][j].buttonState < 164) {
-                                //cout << "button that != Blank" << endl;
-                                RollBack();
-                                continue;
-                            }
-
-
-                            //cout << "getNextstate" << endl;
-                            if (a[i][j].buttonState != curColor) getNextstate(rollbackList.top().saveButton, &a[i][j], false);
-                            else getNextstate(rollbackList.top().saveButton, &a[i][j], true);
-
-                        }
-                    }
-            }
-            SDL_RenderPresent(renderer);
-        }
-    }
-    Successful();
-    completelevelChunk.playChunk();
-
-    playerScore += (int)(1.0 * timeClip.w / lenTimeliquid * levelScore);
-    SDL_Delay(500);
-}*/
+/*
+    |  0     1      2      3      4      5     6     7       8       9     10 |
+    |Blank, Blue, Brown, Green, Orange, Pink, Red, Yellow, Violet, Cyan, Block|
+    |Unselected, Selected, Up, Right, Down, Left, LineUp, LineRight, LineDown, LineLeft,  LineRightUp, LineRightDown, LineLeftDown, LineLeftUp, LineLeftRight, LineUpDown, BridgeLeftRight, BridgeUpDown|
+    |   1           2      3    4       5     6     7       8           9         10            11          12              13            14          15            16            17             18     |
+    0 -> Blank
+    Blue: 1 -> 18
+    Brown: 19 -> 32
+    ...
+    Block: 163
+    Bridge: 164
+    SelectedBridge: 165
+*/
 
 void Game::playGame() {
     double timeperTile = 1.0 * timeClock / timeLiquid.dest.w;
@@ -1105,7 +944,13 @@ void Game::playGame() {
                 if (e.type == SDL_MOUSEBUTTONDOWN && pauseButton.checkMousein()) {
                     pauseGamePls();
                     for (int i = 1; i <= sz; i++)
-                        for (int j = 1; j <= sz; j++) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].buttonState]);
+                        for (int j = 1; j <= sz; j++) {
+                            if (a[i][j].buttonState <= 164) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].buttonState]); else {
+                                a[i][j].render(renderer, mainImage, &buttonClips[165]);
+                                if (a[i][j].buttonState == 166 || a[i][j].buttonState == 168) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].bridgeleftrightColor + 16]);
+                                if (a[i][j].buttonState == 167 || a[i][j].buttonState == 168) a[i][j].render(renderer, mainImage, &buttonClips[a[i][j].bridgeupdownColor + 17]);
+                            }
+                        }
                     curTime = SDL_GetTicks();
                     continue;
                 }
@@ -1221,6 +1066,12 @@ void Game::playGame() {
                                 if (rollbackList.top().oldbuttonState == curColor && rollbackList.size() > 1) {
                                     completepathChunk.playChunk();
                                     Successful();
+                                    BREAK = true;
+                                    break;
+                                }
+
+                                if ((a[i][j].buttonState > curColor && a[i][j].buttonState <= curColor + 17)) {
+                                    RollBackToSpecificButton(&a[i][j]);
                                     BREAK = true;
                                     break;
                                 }
